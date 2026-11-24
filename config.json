@@ -1,0 +1,14 @@
+{
+  "url_glpi": "https://suporte.dwlaw.com.br",
+  "id_formulario_rpa": 6,
+  "url_card_azure": "https://dev.azure.com/DWRPA/RPA/_workitems/edit/",
+  "pasta_perfil_chrome": "%LOCALAPPDATA%\\DWRPA\\GLPI_CHROME",
+  "login_microsoft": true,
+  "minutos_espera_login": 10,
+  "tentativas": 5,
+  "criar_card_azure": true,
+  "url_azure": "https://dev.azure.com/DWRPA",
+  "projeto_azure": "RPA",
+  "time_azure": "RPA Team",
+  "tag_card": "CONS"
+}

@@ -1,0 +1,7 @@
+selenium>=4.20
+webdriver_manager
+undetected_chromedriver
+pygetwindow
+setuptools
+keyring
+pillow
