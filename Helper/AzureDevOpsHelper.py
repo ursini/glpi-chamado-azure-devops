@@ -90,6 +90,20 @@ class AzureDevOpsHelper:
         valores = dados.get("value") or []
         return valores[0]["path"] if valores else None
 
+    def mover_para_topo(self, id_card: int):
+        """Põe o card no topo do backlog do time (e, com isso, no topo do Taskboard), como arrastar na tela.
+        Pela API o Azure cria o card sem ordem, e card sem ordem vai para o fim da página."""
+        try:
+            time = quote(self.config.get("time_azure", "RPA Team"))
+            backlog = self._chamar("GET", f"{self.base}/{time}/_apis/work/backlogs/Microsoft.RequirementCategory/workItems?api-version=7.0-preview.1",
+                                   "buscar a ordem do backlog")
+            primeiro = next((w["target"]["id"] for w in backlog.get("workItems") or [] if w["target"]["id"] != id_card), 0)
+            self._chamar("PATCH", f"{self.base}/{time}/_apis/work/workitemsorder?{VERSAO}", "mover o card para o topo",
+                         {"ids": [id_card], "parentId": 0, "previousId": 0, "nextId": primeiro})
+            logging.info(f"AZURE: CARD {id_card} MOVIDO PARA O TOPO DO BOARD")
+        except Exception as ex:
+            logging.warning(f"AZURE: CARD {id_card} CRIADO, MAS NÃO FOI PARA O TOPO DO BOARD: {ex}")
+
     def criar_bug(self, chamado, sprint) -> int:
         """Cria o Bug no padrão do board e devolve o número do card."""
         campos = {
@@ -104,4 +118,6 @@ class AzureDevOpsHelper:
             campos["System.IterationPath"] = sprint
         corpo = [{"op": "add", "path": f"/fields/{nome}", "value": valor} for nome, valor in campos.items()]
         dados = self._chamar("POST", f"{self.base}/_apis/wit/workitems/$Bug?{VERSAO}", "criar o card", corpo, "application/json-patch+json")
-        return int(dados["id"])
+        id_card = int(dados["id"])
+        self.mover_para_topo(id_card)
+        return id_card
