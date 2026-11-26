@@ -104,6 +104,22 @@ class AzureDevOpsHelper:
         except Exception as ex:
             logging.warning(f"AZURE: CARD {id_card} CRIADO, MAS NÃO FOI PARA O TOPO DO BOARD: {ex}")
 
+    def dono_do_token(self):
+        """E-mail (ou nome) de quem é o token: é a pessoa rodando o robô, e o card fica no nome dela.
+        Devolve None se não conseguir descobrir; aí o card é criado sem responsável."""
+        try:
+            org = self.config.get("url_azure", "https://dev.azure.com/DWRPA").rstrip("/")
+            usuario = self._chamar("GET", f"{org}/_apis/connectionData", "descobrir o dono do token").get("authenticatedUser") or {}
+            email = ((usuario.get("properties") or {}).get("Account") or {}).get("$value")
+            return email or usuario.get("providerDisplayName")
+        except Exception as ex:
+            logging.warning(f"AZURE: NÃO CONSEGUI DESCOBRIR O DONO DO TOKEN, CARD SAI SEM RESPONSÁVEL: {ex}")
+            return None
+
+    def _criar(self, campos: dict) -> dict:
+        corpo = [{"op": "add", "path": f"/fields/{nome}", "value": valor} for nome, valor in campos.items()]
+        return self._chamar("POST", f"{self.base}/_apis/wit/workitems/$Bug?{VERSAO}", "criar o card", corpo, "application/json-patch+json")
+
     def criar_bug(self, chamado, sprint) -> int:
         """Cria o Bug no padrão do board e devolve o número do card."""
         campos = {
@@ -116,8 +132,19 @@ class AzureDevOpsHelper:
         }
         if sprint:
             campos["System.IterationPath"] = sprint
-        corpo = [{"op": "add", "path": f"/fields/{nome}", "value": valor} for nome, valor in campos.items()]
-        dados = self._chamar("POST", f"{self.base}/_apis/wit/workitems/$Bug?{VERSAO}", "criar o card", corpo, "application/json-patch+json")
+        # "responsavel_azure" no config força um nome fixo; sem ele, o card vai para o dono do token
+        responsavel = (self.config.get("responsavel_azure") or "").strip() or self.dono_do_token()
+        if responsavel:
+            campos["System.AssignedTo"] = responsavel
+        try:
+            dados = self._criar(campos)
+        except RuntimeError as ex:
+            # nome do responsável não reconhecido pelo Azure: cria o card mesmo assim, sem ninguém atribuído
+            if not responsavel or "AssignedTo" not in str(ex):
+                raise
+            logging.warning(f"AZURE: NÃO CONSEGUI ATRIBUIR O CARD A '{responsavel}', CRIANDO SEM RESPONSÁVEL: {ex}")
+            del campos["System.AssignedTo"]
+            dados = self._criar(campos)
         id_card = int(dados["id"])
         self.mover_para_topo(id_card)
         return id_card
